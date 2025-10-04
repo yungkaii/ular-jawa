@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Ular Jawa</title>
+    <style>
+        /* CSS untuk tampilan yang ceria dan rapi */
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-image: url(mim.jpg);
+            font-family: 'Press Start 2P', cursive;
+            color: #333;
+        }
+
+        h1 {
+            color: #ff6347; /* Warna tomat yang ceria */
+            text-shadow: 2px 2px #fdfd96;
+        }
+
+        #gameCanvas {
+            border: 8px solid #333;
+            border-radius: 10px;
+            background-color: #90ee90; /* Warna hijau muda untuk arena */
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        #ui-container {
+            display: flex;
+            justify-content: space-between;
+            width: 600px; /* Sesuaikan dengan lebar canvas */
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+        
+        #score {
+            color: #4169e1; /* Royal Blue */
+        }
+
+        #highScore {
+            color: #daa520; /* Goldenrod */
+        }
+        
+    </style>
+</head>
+<body>
+
+    <h1>Ular Jawa</h1>
+    
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-container">
+        <div id="score">SKOR: 0</div>
+        <div id="highScore">SKOR TERTINGGI: 0</div>
+    </div>
+
+
+    <script>
+        // --- PENGATURAN FLEKSIBEL ---
+        // Anda bisa mengubah nilai di bawah ini untuk kustomisasi
+        const PENGATURAN = {
+            UKURAN_GRID: 20,       // Ukuran setiap kotak dalam pixel
+            LEBAR_ARENA: 30,       // Lebar arena dalam satuan grid (30 kotak)
+            TINGGI_ARENA: 20,      // Tinggi arena dalam satuan grid (20 kotak)
+            KECEPATAN_AWAL: 150,   // Kecepatan game dalam milidetik (makin kecil, makin cepat)
+            WARNA_ULAR: '#4682b4', // Warna badan ular (SteelBlue)
+            WARNA_KEPALA_ULAR: '#355E3B', // Warna kepala ular (HunterGreen)
+            WARNA_MAKANAN: '#ff4500', // Warna makanan (OrangeRed)
+            WARNA_LATAR: '#90ee90', // Warna latar arena (LightGreen)
+            WARNA_BORDER: '#333333',// Warna border arena
+        };
+
+        // --- Variabel Game ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const highScoreElement = document.getElementById('highScore');
+
+        // Mengatur ukuran canvas berdasarkan pengaturan
+        canvas.width = PENGATURAN.UKURAN_GRID * PENGATURAN.LEBAR_ARENA;
+        canvas.height = PENGATURAN.UKURAN_GRID * PENGATURAN.TINGGI_ARENA;
+        document.getElementById('ui-container').style.width = `${canvas.width}px`;
+
+        let ular = [{ x: 10, y: 10 }]; // Posisi awal ular
+        let makanan = {};
+        let arah = { x: 0, y: 0 };
+        let arahBerikutnya = { x: 0, y: 0 };
+        let skor = 0;
+        let highScore = localStorage.getItem('highScoreUlarCeria') || 0;
+        let isGameOver = false;
+        let isGameRunning = false;
+        
+        // --- Fungsi Utama Game ---
+
+        function buatMakanan() {
+            makanan = {
+                x: Math.floor(Math.random() * PENGATURAN.LEBAR_ARENA),
+                y: Math.floor(Math.random() * PENGATURAN.TINGGI_ARENA)
+            };
+            // Pastikan makanan tidak muncul di atas badan ular
+            for (let bagian of ular) {
+                if (bagian.x === makanan.x && bagian.y === makanan.y) {
+                    buatMakanan(); // Buat ulang jika posisi sama
+                    break;
+                }
+            }
+        }
+
+        function gambar() {
+            // Gambar latar
+            ctx.fillStyle = PENGATURAN.WARNA_LATAR;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Gambar ular
+            ular.forEach((bagian, index) => {
+                ctx.fillStyle = index === 0 ? PENGATURAN.WARNA_KEPALA_ULAR : PENGATURAN.WARNA_ULAR;
+                ctx.fillRect(bagian.x * PENGATURAN.UKURAN_GRID, bagian.y * PENGATURAN.UKURAN_GRID, PENGATURAN.UKURAN_GRID, PENGATURAN.UKURAN_GRID);
+                // Menambahkan border agar terlihat seperti kotak-kotak
+                ctx.strokeStyle = PENGATURAN.WARNA_LATAR;
+                ctx.strokeRect(bagian.x * PENGATURAN.UKURAN_GRID, bagian.y * PENGATURAN.UKURAN_GRID, PENGATURAN.UKURAN_GRID, PENGATURAN.UKURAN_GRID);
+            });
+
+            // Gambar makanan
+            ctx.fillStyle = PENGATURAN.WARNA_MAKANAN;
+            ctx.beginPath();
+            const radius = PENGATURAN.UKURAN_GRID / 2;
+            ctx.arc(makanan.x * PENGATURAN.UKURAN_GRID + radius, makanan.y * PENGATURAN.UKURAN_GRID + radius, radius, 0, 2 * Math.PI);
+            ctx.fill();
+        }
+        
+        function tampilkanPesan(pesan, subPesan) {
+             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+             ctx.fillRect(0, 0, canvas.width, canvas.height);
+             
+             ctx.fillStyle = 'white';
+             ctx.font = `bold ${PENGATURAN.UKURAN_GRID * 2}px 'Press Start 2P'`;
+             ctx.textAlign = 'center';
+             ctx.textBaseline = 'middle';
+             ctx.fillText(pesan, canvas.width / 2, canvas.height / 2 - 20);
+
+             ctx.font = `bold ${PENGATURAN.UKURAN_GRID * 0.8}px 'Press Start 2P'`;
+             ctx.fillText(subPesan, canvas.width / 2, canvas.height / 2 + 20);
+        }
+
+        function update() {
+            if (isGameOver) {
+                tampilkanPesan('GAME OVER', 'Tekan Spasi untuk Mulai Lagi');
+                return;
+            }
+            
+            if (!isGameRunning) {
+                 tampilkanPesan('ULAR JAWA', 'Tekan Panah untuk Mulai');
+                 return;
+            }
+
+            // Perbarui arah dari antrian
+            arah = arahBerikutnya;
+
+            const kepala = { x: ular[0].x + arah.x, y: ular[0].y + arah.y };
+            ular.unshift(kepala); // Tambah kepala baru
+
+            // Cek jika makan
+            if (kepala.x === makanan.x && kepala.y === makanan.y) {
+                skor++;
+                buatMakanan();
+            } else {
+                ular.pop(); // Hapus ekor jika tidak makan
+            }
+            
+            // Cek tabrakan
+            if (
+                kepala.x < 0 || kepala.x >= PENGATURAN.LEBAR_ARENA ||
+                kepala.y < 0 || kepala.y >= PENGATURAN.TINGGI_ARENA ||
+                cekTabrakanDiri()
+            ) {
+                isGameOver = true;
+                if (skor > highScore) {
+                    highScore = skor;
+                    localStorage.setItem('highScoreUlarCeria', highScore);
+                }
+            }
+            
+            // Update UI
+            scoreElement.textContent = `SKOR: ${skor}`;
+            highScoreElement.textContent = `SKOR TERTINGGI: ${highScore}`;
+            
+            gambar();
+        }
+        
+        function cekTabrakanDiri() {
+            const kepala = ular[0];
+            for (let i = 1; i < ular.length; i++) {
+                if (ular[i].x === kepala.x && ular[i].y === kepala.y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        function resetGame() {
+            ular = [{ x: 10, y: 10 }];
+            arah = { x: 0, y: 0 };
+            arahBerikutnya = { x: 0, y: 0 };
+            skor = 0;
+            isGameOver = false;
+            isGameRunning = false;
+            buatMakanan();
+        }
+
+        // --- Kontrol ---
+        document.addEventListener('keydown', e => {
+            // Memulai game saat tombol panah ditekan pertama kali
+            if (!isGameRunning && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                isGameRunning = true;
+            }
+            
+            if (isGameOver && e.key === ' ') {
+                resetGame();
+                return;
+            }
+
+            switch (e.key) {
+                case 'ArrowUp':
+                    if (arah.y === 0) arahBerikutnya = { x: 0, y: -1 };
+                    break;
+                case 'ArrowDown':
+                    if (arah.y === 0) arahBerikutnya = { x: 0, y: 1 };
+                    break;
+                case 'ArrowLeft':
+                    if (arah.x === 0) arahBerikutnya = { x: -1, y: 0 };
+                    break;
+                case 'ArrowRight':
+                    if (arah.x === 0) arahBerikutnya = { x: 1, y: 0 };
+                    break;
+            }
+        });
+
+        // --- Inisialisasi Game ---
+        resetGame();
+        highScoreElement.textContent = `SKOR TERTINGGI: ${highScore}`;
+        setInterval(update, PENGATURAN.KECEPATAN_AWAL);
+
+    </script>
+</body>
+</html>
